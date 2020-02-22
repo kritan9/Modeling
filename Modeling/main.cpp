@@ -210,8 +210,8 @@ int main()
 			// spotLight
 			ourShader.setVec3("spotLight.position", camera.Position);
 			ourShader.setVec3("spotLight.direction", camera.Front);
-			ourShader.setVec3("spotLight.ambient", 0.05f, 0.05f, 0.05f);
-			//ourShader.setVec3("spotLight.ambient", 0.0f, 0.0f, 0.0f);
+			//ourShader.setVec3("spotLight.ambient", 0.05f, 0.05f, 0.05f);
+			ourShader.setVec3("spotLight.ambient", 0.0f, 0.0f, 0.0f);
 			ourShader.setVec3("spotLight.diffuse", 1.0f, 1.0f, 1.0f);
 			ourShader.setVec3("spotLight.specular", 1.0f, 1.0f, 1.0f);
 			ourShader.setFloat("spotLight.constant", 1.0f);
