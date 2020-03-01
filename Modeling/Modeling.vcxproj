@@ -156,6 +156,8 @@
     <None Include="lamp.vs" />
     <None Include="shader.fs" />
     <None Include="shader.vs" />
+    <None Include="shadow.fs" />
+    <None Include="shadow.vs" />
     <None Include="skybox.fs" />
     <None Include="skybox.vs" />
   </ItemGroup>

@@ -2,7 +2,7 @@
 #include "mesh.h"
 #include "model.h"
 
-#define SCALE 0.2f
+#define SCALE 0.0104f
 
 // camera
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
@@ -27,9 +27,10 @@ void processInput(GLFWwindow *window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 unsigned int loadCubemap(vector<std::string> faces);
+void renderScene(const Shader &shader, Model &houseModel);
 
 
-
+float near_plane = 1.0f, far_plane = 20.5f;
 int main()
 {
 
@@ -56,6 +57,7 @@ int main()
 	Shader ourShader("shader.vs","shader.fs");
 	Shader lampShader("lamp.vs", "lamp.fs");
 	Shader skyboxShader("skybox.vs", "skybox.fs");
+	Shader simpleDepthShader("shadow.vs", "shadow.fs");
 
 
 	// load models
@@ -65,6 +67,10 @@ int main()
 	//Model houseModel("../Resources/oggy/house.obj");
 	//Model houseModel("../Resources/3ds/House N111111.3DS");
 	//Model houseModel("../Resources/plane/plane.obj");
+	//Model houseModel("../Resources/house/house.obj");
+	//Model houseModel("../Resources/house3/house3.obj");
+	//Model houseModel("../Resources/Old House/house.obj");
+
 	// positions of the point lights
 	glm::vec3 pointLightPositions[] = {
 		glm::vec3(1.4f,  0.4f,  4.0f),
@@ -148,6 +154,38 @@ int main()
 	skyboxShader.use();
 	skyboxShader.setInt("skybox", 0);
 
+	// configure depth map FBO
+   // -----------------------
+	const unsigned int SHADOW_WIDTH = 1920, SHADOW_HEIGHT = 1920;
+	unsigned int depthMapFBO;
+	glGenFramebuffers(1, &depthMapFBO);
+	// create depth texture
+	unsigned int depthMap;
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float borderColor[] = { 1.0f, 1.0f, 1.0f,  1.0f};
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+	// attach depth texture as FBO's depth buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+	// lighting info
+	// -------------
+	glm::vec3 lightDir(5.0f, -4.0f, 1.0f);
+
+	//shadowmap  config in our shader
+	ourShader.use();
+	ourShader.setInt("shadowMap", 0);
+
 	// render loop
 	// -----------
 	while (!glfwWindowShouldClose(window))
@@ -159,7 +197,29 @@ int main()
 		glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		
+		// 1. render depth of scene to texture (from light's perspective)
+		// --------------------------------------------------------------
+		glm::mat4 lightProjection, lightView;
+		glm::mat4 lightSpaceMatrix;
+		//cout << near_plane << " " << far_plane << " "<<scale<<endl;
+		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+		lightView = glm::lookAt(-lightDir, glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0));
+		lightSpaceMatrix = lightProjection * lightView;
+		// render scene from light's point of view
+		simpleDepthShader.use();
+		simpleDepthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		renderScene(simpleDepthShader,houseModel);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+		// 2. render scene as normal using the generated depth/shadow map  
+		// --------------------------------------------------------------
+		glViewport(0, 0, WIDTH, HEIGHT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		ourShader.use();
 		{
 			ourShader.setVec3("viewPos", camera.Position);
@@ -171,10 +231,12 @@ int main()
 			   by using 'Uniform buffer objects', but that is something we'll discuss in the 'Advanced GLSL' tutorial.
 			*/
 			// directional light
-			ourShader.setVec3("dirLight.direction", -0.2f, -1.0f, -0.3f);
+			ourShader.setVec3("dirLight.direction", lightDir);
 			ourShader.setVec3("dirLight.ambient", 0.05f, 0.05f, 0.05f);
 			ourShader.setVec3("dirLight.diffuse", 0.4f, 0.4f, 0.4f);
 			ourShader.setVec3("dirLight.specular", 0.5f, 0.5f, 0.5f);
+			ourShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+
 			// point light 1
 			ourShader.setVec3("pointLights[0].position", pointLightPositions[0]);
 			ourShader.setVec3("pointLights[0].ambient", 0.05f, 0.05f, 0.05f);
@@ -219,25 +281,30 @@ int main()
 			ourShader.setFloat("spotLight.quadratic", 0.032);
 			ourShader.setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
 			ourShader.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(15.0f)));
-		}
+
+
+		}//light uiforms
 
 			glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
 			glm::mat4 view = camera.GetViewMatrix();
 			ourShader.setMat4("projection", projection);
 			ourShader.setMat4("view", view);
 		
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, depthMap);
 		// render the loaded model
-		glm::mat4 model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f));
-		model = glm::rotate(model, glm::radians(angleZ), glm::vec3(0.0f,0.0f,-1.0f));
-		model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
-		model = glm::rotate(model, glm::radians(angleX), glm::vec3(1.0f, 0.0f, 0.0f));
-		// translate it down so it's at the center of the scene
-		model = glm::scale(model, scale*glm::vec3(SCALE, SCALE, SCALE));	// it's a bit too big for our scene, so scale it down
-		ourShader.setMat4("model", model);
-		ourShader.setInt("spot", spotEnabled);
+			renderScene(ourShader,houseModel);
+		//glm::mat4 model = glm::mat4(1.0f);
+		//model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f));
+		//model = glm::rotate(model, glm::radians(angleZ), glm::vec3(0.0f,0.0f,-1.0f));
+		//model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
+		//model = glm::rotate(model, glm::radians(angleX), glm::vec3(1.0f, 0.0f, 0.0f));
+		//// translate it down so it's at the center of the scene
+		//model = glm::scale(model, scale*glm::vec3(SCALE, SCALE, SCALE));	// it's a bit too big for our scene, so scale it down
+		//ourShader.setMat4("model", model);
+		/*ourShader.setInt("spot", spotEnabled);
 		
-		houseModel.Draw(ourShader);
+		houseModel.Draw(ourShader);*/
 
 		// also draw the lamp object(s)
 		lampShader.use();
@@ -246,6 +313,8 @@ int main()
 
 		// we now draw as many light bulbs as we have point lights.
 		glBindVertexArray(skyboxVAO);
+		glm::mat4 model = glm::mat4(1.0f);
+		//pointlights
 		for (unsigned int i = 0; i < 4; i++)
 		{
 			model = glm::mat4(1.0f);
@@ -254,6 +323,19 @@ int main()
 			lampShader.setMat4("model", model);
 			 glDrawArrays(GL_TRIANGLES, 0, 36);
 		}
+
+		////directionalLight
+		//model = glm::mat4(1.0f);
+		//model = glm::translate(model, -lightDir);
+		//model = glm::scale(model, glm::vec3(0.1f)); // Make it a smaller cube
+		//lampShader.setMat4("model", model);
+		//glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		////origin
+		//model = glm::mat4(1.0f);
+		//model = glm::scale(model, glm::vec3(0.1f)); // Make it a smaller cube
+		//lampShader.setMat4("model", model);
+		//glDrawArrays(GL_TRIANGLES, 0, 36);
 
 		// draw skybox as last
 		glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
@@ -287,6 +369,23 @@ int main()
 	glfwTerminate();
 	return 0;
 
+}
+
+void renderScene(const Shader &shader,Model &houseModel)
+{
+	// render the loaded model
+		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(-3.0f, -1.75f, 0.0f));
+		model = glm::rotate(model, glm::radians(angleZ), glm::vec3(0.0f,0.0f,-1.0f));
+		model = glm::rotate(model, glm::radians(angleY), glm::vec3(0.0f, 1.0f, 0.0f));
+		model = glm::rotate(model, glm::radians(angleX), glm::vec3(1.0f, 0.0f, 0.0f));
+		// translate it down so it's at the center of the scene
+		model = glm::scale(model, scale*glm::vec3(SCALE, SCALE, SCALE));	// it's a bit too big for our scene, so scale it down
+		shader.setMat4("model", model);
+
+		shader.setInt("spot", spotEnabled);
+
+		houseModel.Draw(shader);
 }
 
 
@@ -356,6 +455,17 @@ void processInput(GLFWwindow *window)
 		angleZ -= deltaTime * 45;
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
 		angleZ += deltaTime * 45;
+
+
+	/*if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS)
+		near_plane -= deltaTime * 45;
+	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+		near_plane += deltaTime * 45;
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
+		far_plane -= deltaTime * 45;
+	if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS)
+		far_plane += deltaTime * 45;*/
+
 
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spotKeyPressed)
 	{

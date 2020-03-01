@@ -67,5 +67,11 @@
     <None Include="skybox.vs">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="shadow.vs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="shadow.fs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

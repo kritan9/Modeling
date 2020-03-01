@@ -52,7 +52,7 @@ void Model::Draw(Shader shader)
 {
 	for (unsigned int i = 0; i < meshes.size(); i++)
 	{
-		///if (i == static_cast<int>(glfwGetTime()) % meshes.size()) { meshes[i].Draw(shader); cout << i << endl; }
+		//if (i == static_cast<int>(glfwGetTime()) % meshes.size()) { meshes[i].Draw(shader); cout << i << endl; }
 		if (i != 96) meshes[i].Draw(shader);
 		//if (i == 202) meshes[i].Draw(shader);
 		
