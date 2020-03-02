@@ -10,7 +10,6 @@
 using namespace std;
 
 unsigned int TextureFromFile(const char *path, const string &directory,unsigned int& num ,bool gamma = false);
-
 class Model
 {
 public:

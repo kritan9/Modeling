@@ -18,13 +18,13 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="glad.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="std_image.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="model.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Dependencies\include\glad\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -47,6 +47,9 @@
     <ClInclude Include="model.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shadow.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="shader.vs">
@@ -67,10 +70,19 @@
     <None Include="skybox.vs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="shadow.vs">
+    <None Include="dShadow.vs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="shadow.fs">
+    <None Include="dShadow.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="pShadow.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="pShadow.gs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="pShadow.vs">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

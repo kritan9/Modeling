@@ -138,7 +138,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="glad.c" />
+    <ClCompile Include="..\Dependencies\include\glad\glad.c" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="std_image.cpp" />
@@ -149,15 +149,19 @@
     <ClInclude Include="mesh.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="shader.h" />
+    <ClInclude Include="shadow.h" />
     <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="lamp.fs" />
     <None Include="lamp.vs" />
+    <None Include="pShadow.fs" />
+    <None Include="pShadow.gs" />
+    <None Include="pShadow.vs" />
     <None Include="shader.fs" />
     <None Include="shader.vs" />
-    <None Include="shadow.fs" />
-    <None Include="shadow.vs" />
+    <None Include="dShadow.fs" />
+    <None Include="dShadow.vs" />
     <None Include="skybox.fs" />
     <None Include="skybox.vs" />
   </ItemGroup>

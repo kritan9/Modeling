@@ -1,6 +1,8 @@
 #pragma once
 #ifndef MAIN_H
 #define MAIN_H
+#define SHADOW_WIDTH 1024
+#define SHADOW_HEIGHT 1024
 
 #include "stb_image.h"
 #include "camera.h"
@@ -24,5 +26,6 @@
 #define WIDTH 1366
 #define HEIGHT 768
 using namespace std;
+
 
 #endif

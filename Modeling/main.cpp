@@ -1,6 +1,7 @@
 #include "main.h"
 #include "mesh.h"
 #include "model.h"
+#include "shadow.h"
 
 #define SCALE 0.0104f
 
@@ -10,11 +11,18 @@ float lastX = WIDTH / 2.0f;
 float lastY = HEIGHT / 2.0f;
 float angleX = 0.0f, angleY = 0.0f, angleZ = 0.0f;
 float scale = 1.0f;
+float scr_width = (float)WIDTH, scr_height = (float)HEIGHT;
 //glm::vec3 front(camera.Front), rright(camera.Right), up(camera.Up);
 bool firstMouse = true;
 
 bool spotEnabled = false;
 bool spotKeyPressed = false;
+
+bool showFPS = false;
+bool FPSkeyPressed = false;
+
+bool showLight = false;
+bool lightKeyPressed = false;
 
 // timing
 float deltaTime = 0.0f;	// time between current frame and last frame
@@ -30,7 +38,8 @@ unsigned int loadCubemap(vector<std::string> faces);
 void renderScene(const Shader &shader, Model &houseModel);
 
 
-float near_plane = 1.0f, far_plane = 20.5f;
+float near_planeD = 1.0f, far_planeD = 20.5f;
+float  near_planeP = 1.0f, far_planeP = 25.0f;
 int main()
 {
 
@@ -57,7 +66,8 @@ int main()
 	Shader ourShader("shader.vs","shader.fs");
 	Shader lampShader("lamp.vs", "lamp.fs");
 	Shader skyboxShader("skybox.vs", "skybox.fs");
-	Shader simpleDepthShader("shadow.vs", "shadow.fs");
+	Shader simpleDepthShaderD("dShadow.vs", "dShadow.fs");
+	Shader simpleDepthShaderP("pShadow.vs", "pShadow.fs", "pShadow.gs");
 
 
 	// load models
@@ -154,28 +164,10 @@ int main()
 	skyboxShader.use();
 	skyboxShader.setInt("skybox", 0);
 
-	// configure depth map FBO
-   // -----------------------
-	const unsigned int SHADOW_WIDTH = 1920, SHADOW_HEIGHT = 1920;
-	unsigned int depthMapFBO;
-	glGenFramebuffers(1, &depthMapFBO);
-	// create depth texture
-	unsigned int depthMap;
-	glGenTextures(1, &depthMap);
-	glBindTexture(GL_TEXTURE_2D, depthMap);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	float borderColor[] = { 1.0f, 1.0f, 1.0f,  1.0f};
-	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-	// attach depth texture as FBO's depth buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	Shadow dShadow, pShadow[2];//sShadow;
+	dShadow.initDepthmap();
+	for(int i=0;i<2;i++) pShadow[i].initDepthCubemap();
+	//sShadow.initDepthCubemap();
 
 
 	// lighting info
@@ -184,7 +176,9 @@ int main()
 
 	//shadowmap  config in our shader
 	ourShader.use();
-	ourShader.setInt("shadowMap", 0);
+	ourShader.setInt("shadowMapD", 4);
+	for(int i=0;i<2;i++) ourShader.setInt(("shadowMapP["+std::to_string(i)+"]").c_str(), i+5);
+	//ourShader.setInt("shadowMapS",9);
 
 	// render loop
 	// -----------
@@ -196,29 +190,83 @@ int main()
 		// ------
 		glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//pointLights
+		for (int j = 0;j < 2;j++)
+		{
+			// 0. create depth cubemap transformation matrices
+			// -----------------------------------------------
+			glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_planeP, far_planeP);
+			std::vector<glm::mat4> shadowTransforms;
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+			shadowTransforms.push_back(shadowProj * glm::lookAt(pointLightPositions[j], pointLightPositions[j] + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
 
-		// 1. render depth of scene to texture (from light's perspective)
+			// 1.a render scene to depth cubemap(from point light's perspective)
+			// --------------------------------
+			glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+			glBindFramebuffer(GL_FRAMEBUFFER, pShadow[j].depthMapFBO);
+			glClear(GL_DEPTH_BUFFER_BIT);
+			simpleDepthShaderP.use();
+			for (unsigned int i = 0; i < 6; ++i)
+				simpleDepthShaderP.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+			simpleDepthShaderP.setFloat("far_plane", far_planeP);
+			simpleDepthShaderP.setVec3("lightPos", pointLightPositions[j]);
+			renderScene(simpleDepthShaderP, houseModel);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		}
+
+		////spotLight
+		//// 0. create depth cubemap transformation matrices
+		//	// -----------------------------------------------
+		//glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_planeP, far_planeP);
+		//std::vector<glm::mat4> shadowTransforms;
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+		//shadowTransforms.push_back(shadowProj * glm::lookAt(camera.Position, camera.Position + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+
+		//// 1.a render scene to depth cubemap(from point light's perspective)
+		//// --------------------------------
+		//glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+		//glBindFramebuffer(GL_FRAMEBUFFER, sShadow.depthMapFBO);
+		//glClear(GL_DEPTH_BUFFER_BIT);
+		//simpleDepthShaderP.use();
+		//for (unsigned int i = 0; i < 6; ++i)
+		//	simpleDepthShaderP.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+		//simpleDepthShaderP.setFloat("far_plane", far_planeP);
+		//simpleDepthShaderP.setVec3("lightPos", camera.Position);
+		//renderScene(simpleDepthShaderP, houseModel);
+		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// 1.b render depth of scene to texture (from dirlight's perspective)
 		// --------------------------------------------------------------
 		glm::mat4 lightProjection, lightView;
 		glm::mat4 lightSpaceMatrix;
 		//cout << near_plane << " " << far_plane << " "<<scale<<endl;
-		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+		lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_planeD, far_planeD);
 		lightView = glm::lookAt(-lightDir, glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0));
 		lightSpaceMatrix = lightProjection * lightView;
 		// render scene from light's point of view
-		simpleDepthShader.use();
-		simpleDepthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+		simpleDepthShaderD.use();
+		simpleDepthShaderD.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
 		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, dShadow.depthMapFBO);
 		glClear(GL_DEPTH_BUFFER_BIT);
-		renderScene(simpleDepthShader,houseModel);
+		renderScene(simpleDepthShaderD,houseModel);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
 		// 2. render scene as normal using the generated depth/shadow map  
 		// --------------------------------------------------------------
-		glViewport(0, 0, WIDTH, HEIGHT);
+		scr_width = glfwGetVideoMode(glfwGetPrimaryMonitor())->width;
+		scr_height = glfwGetVideoMode(glfwGetPrimaryMonitor())->height;
+		glViewport(0, 0, scr_width, scr_height);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		ourShader.use();
 		{
@@ -285,13 +333,22 @@ int main()
 
 		}//light uiforms
 
-			glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)WIDTH / (float)HEIGHT, 0.1f, 100.0f);
+			glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom),scr_width / scr_height, 0.1f, 100.0f);
 			glm::mat4 view = camera.GetViewMatrix();
 			ourShader.setMat4("projection", projection);
 			ourShader.setMat4("view", view);
+			ourShader.setFloat("far_plane", far_planeP);
 		
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, depthMap);
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, dShadow.depthMap);
+			for (int i = 0;i < 2;i++)
+			{
+				glActiveTexture(GL_TEXTURE5+i);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, pShadow[i].depthCubemap);
+			}
+			/*glActiveTexture(GL_TEXTURE9);
+			glBindTexture(GL_TEXTURE_2D, sShadow.depthCubemap);*/
+
 		// render the loaded model
 			renderScene(ourShader,houseModel);
 		//glm::mat4 model = glm::mat4(1.0f);
@@ -315,7 +372,7 @@ int main()
 		glBindVertexArray(skyboxVAO);
 		glm::mat4 model = glm::mat4(1.0f);
 		//pointlights
-		for (unsigned int i = 0; i < 4; i++)
+		if(showLight)for (unsigned int i = 0; i < 2; i++)
 		{
 			model = glm::mat4(1.0f);
 			model = glm::translate(model, pointLightPositions[i]);
@@ -426,6 +483,8 @@ void processInput(GLFWwindow *window)
 	deltaTime = currentFrame - lastFrame;
 	lastFrame = currentFrame;
 
+	if(showFPS) cout << 1 / deltaTime << endl;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
@@ -475,6 +534,26 @@ void processInput(GLFWwindow *window)
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
 	{
 		spotKeyPressed = false;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !FPSkeyPressed)
+	{
+		showFPS = !showFPS;
+		FPSkeyPressed = true;
+	}
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE)
+	{
+		FPSkeyPressed = false;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !lightKeyPressed)
+	{
+		showLight = !showLight;
+		lightKeyPressed = true;
+	}
+	if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE)
+	{
+		lightKeyPressed = false;
 	}
 
 }
