@@ -66,8 +66,7 @@ uniform int specularN;
 uniform int nrComponents_d;
 uniform int nrComponents_sp;
 uniform bool spot;
-uniform bool reverse_normal;
-uniform bool reverse_normal_texture;
+
 
 uniform float far_plane;
 vec3 sampleOffsetDirections[20] = vec3[]
@@ -89,10 +88,9 @@ float ShadowCalculationP(vec3 fragPos,vec3 lightPos, int i);
 
 void main()
 {   
-	if(diffuseN!=0){if(nrComponents_d==4){if(vec4(texture(material.texture_diffuse1,TexCoords)).w<0.1) discard;}}
+	
     // properties
     vec3 norm = normalize(Normal);
-	if((reverse_normal && diffuseN==0)||reverse_normal_texture) norm*=-1;
     vec3 viewDir = normalize(viewPos - FragPos);
 	//vec4 col =vec4(texture(material.texture_diffuse1, TexCoords));
 	//float w=col.w;

@@ -53,22 +53,7 @@ void Model::Draw(Shader shader)
 {
 	for (unsigned int i = 0; i < meshes.size(); i++)
 	{
-		//if (i == static_cast<int>(glfwGetTime()) % meshes.size()) { meshes[i].Draw(shader); cout << i << endl; }
-		shader.setInt("reverse_normal", true);
-		for (int j = 0;j < sizeof(num)/sizeof(unsigned int);j++)
-		{
-			if (i == num[j])
-			{
-				shader.setInt("reverse_normal", false);
-				break;
-			}
-		}
-		if(i==115) shader.setInt("reverse_normal_texture", true);
-		else shader.setInt("reverse_normal_texture", false);
-		if (i != 96) meshes[i].Draw(shader);
-		//if (i == 202) meshes[i].Draw(shader);
-		
-		
+	 meshes[i].Draw(shader);
 	}
 }
 
